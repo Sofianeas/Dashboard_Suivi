@@ -1,0 +1,41 @@
+﻿# Environnements Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Tests et qualité
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets et configuration locale
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*service-account*.json
+*credentials*.json
+
+# Données opérationnelles : ne pas versionner par défaut
+data/raw/
+data/processed/
+data/reference_registry/
+
+# Base de données PostgreSQL locale
+%APPDATA%/
+**/mydata/
+*.dump
+*.backup
+
+# Journaux et fichiers locaux
+*.log
+.DS_Store
+Thumbs.db
+
+# Éditeurs
+.vscode/
+.idea/

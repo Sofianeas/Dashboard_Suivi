@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f2742">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+</head>
+<body>
+    <div class="app">
+        <header class="app-header">
+            <a class="brand" href="/" aria-label="IRIS, accueil du dashboard">
+                <span class="brand-mark" aria-hidden="true">I</span>
+                <span class="brand-copy">
+                    <span class="brand-name">IRIS</span>
+                    <span class="brand-product">Enterprise Analytics</span>
+                </span>
+            </a>
+            <div class="header-context">
+                <span class="header-context__label">HELP DESK</span>
+                <span class="header-context__divider" aria-hidden="true"></span>
+                <span>Vue opérationnelle</span>
+            </div>
+            <div class="header-status" aria-live="polite">
+                <span class="status-indicator" aria-hidden="true"></span>
+                <span id="api-status" class="status status--loading">Vérification...</span>
+            </div>
+        </header>
+
+        <div class="app-body">
+            <aside class="sidebar" aria-label="Navigation principale">
+                <nav class="navigation">
+                    <a href="/" class="navigation-item navigation-item--active" aria-current="page" data-app-view="dashboard">
+                        <span class="navigation-icon" aria-hidden="true">◫</span>
+                        <span>Vue d’ensemble</span>
+                    </a>
+                    <button class="navigation-item" type="button" data-app-view="reference-registry" aria-current="false">
+                        <span class="navigation-icon" aria-hidden="true">⌕</span>
+                        <span>Références tickets</span>
+                    </button>
+                    <span class="navigation-item navigation-item--disabled" aria-disabled="true">
+                        <span class="navigation-icon" aria-hidden="true">▤</span>
+                        <span>Tickets</span>
+                    </span>
+                    <span class="navigation-item navigation-item--disabled" aria-disabled="true">
+                        <span class="navigation-icon" aria-hidden="true">◷</span>
+                        <span>Engagements SLA</span>
+                    </span>
+                    <span class="navigation-item navigation-item--disabled" aria-disabled="true">
+                        <span class="navigation-icon" aria-hidden="true">◇</span>
+                        <span>Clients</span>
+                    </span>
+                    <span class="navigation-item navigation-item--disabled" aria-disabled="true">
+                        <span class="navigation-icon" aria-hidden="true">◎</span>
+                        <span>Techniciens</span>
+                    </span>
+                </nav>
+                <div class="sidebar-footer">
+                    <span class="sidebar-footer__mark" aria-hidden="true">IR</span>
+                    <span>Analyse de service<br><strong>Temps de résolution</strong></span>
+                </div>
+            </aside>
+
+            <main id="dashboard-view" class="workspace">
+                <header class="page-header">
+                    <div>
+                        <p class="eyebrow">CENTRE DE PILOTAGE <span aria-hidden="true">/</span> SUPPORT</p>
+                        <h1>Activité Help Desk</h1>
+                        <p class="page-description">Suivez le volume de tickets et les temps de résolution sur la période sélectionnée.</p>
+                    </div>
+                    <div class="page-meta">
+                        <span class="page-meta__dot" aria-hidden="true"></span>
+                        <span>Données analytiques</span>
+                    </div>
+                </header>
+
+                <section class="dashboard-filters" aria-labelledby="filters-title">
+                    <div class="dashboard-filters__header">
+                        <div>
+                            <p class="eyebrow">AFFINER L’ANALYSE</p>
+                            <h2 id="filters-title">Filtres</h2>
+                            <p class="section-description">Les indicateurs et graphiques se mettent à jour à chaque sélection.</p>
+                        </div>
+                        <button id="filters-reset" class="button button--secondary" type="button">
+                            <span aria-hidden="true">↺</span>
+                            Réinitialiser
+                        </button>
+                    </div>
+
+                    <div class="dashboard-filters__grid">
+                        <div class="filter-field">
+                            <label for="filter-date-from">Date de début</label>
+                            <input id="filter-date-from" type="date" autocomplete="off">
+                        </div>
+                        <div class="filter-field">
+                            <label for="filter-date-to">Date de fin</label>
+                            <input id="filter-date-to" type="date" autocomplete="off">
+                        </div>
+                        <div class="filter-field">
+                            <label for="filter-client">Client</label>
+                            <select id="filter-client" disabled>
+                                <option value="ALL">Tous les clients</option>
+                            </select>
+                        </div>
+                        <div class="filter-field">
+                            <label for="filter-problem">Problématique</label>
+                            <select id="filter-problem" disabled>
+                                <option value="ALL">Toutes les problématiques</option>
+                            </select>
+                        </div>
+                        <div class="filter-field">
+                            <label for="filter-priority">Priorité</label>
+                            <select id="filter-priority" disabled>
+                                <option value="ALL">Toutes les priorités</option>
+                            </select>
+                        </div>
+                        <div class="filter-field">
+                            <label for="filter-technician">Technicien</label>
+                            <select id="filter-technician" disabled>
+                                <option value="ALL">Tous les techniciens</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="filter-footnote"><span aria-hidden="true">⌕</span> Les filtres peuvent être combinés.</p>
+                    <div class="filter-catalog-status">
+                        <p id="filter-catalog-status" class="filter-footnote" role="status" aria-live="polite" hidden></p>
+                        <button id="filter-catalog-retry" class="button button--secondary" type="button" hidden>Réessayer les options</button>
+                    </div>
+                </section>
+
+                <div id="dashboard-loading" class="feedback feedback--loading" role="status" aria-live="polite" hidden>
+                    <span class="spinner" aria-hidden="true"></span>
+                    <span>Actualisation des indicateurs…</span>
+                </div>
+                <div id="dashboard-error" class="feedback feedback--error" role="alert" hidden>
+                    <div class="feedback__message">
+                        <strong>Le dashboard n’a pas pu être actualisé.</strong>
+                        <span id="dashboard-error-message"></span>
+                    </div>
+                    <button id="dashboard-retry" class="button button--secondary" type="button">Réessayer</button>
+                </div>
+
+                <section id="dashboard-results" class="dashboard-results" aria-label="Résultats du dashboard" aria-busy="true" hidden>
+                    <section class="kpi-grid" aria-label="Indicateurs clés">
+                        <article class="kpi-card kpi-card--primary">
+                            <div class="kpi-card__topline">
+                                <span class="kpi-card__label">Tickets retenus</span>
+                                <span class="kpi-icon kpi-icon--blue" aria-hidden="true">▤</span>
+                            </div>
+                            <strong id="kpi-ticket-count" class="kpi-card__value">—</strong>
+                            <span class="kpi-card__caption">hors doublons exacts</span>
+                        </article>
+                        <article class="kpi-card">
+                            <div class="kpi-card__topline">
+                                <span class="kpi-card__label">Durée moyenne</span>
+                                <span class="kpi-icon kpi-icon--cyan" aria-hidden="true">◷</span>
+                            </div>
+                            <strong id="kpi-resolution-mean" class="kpi-card__value">—</strong>
+                            <span class="kpi-card__caption">temps de résolution</span>
+                        </article>
+                        <article class="kpi-card">
+                            <div class="kpi-card__topline">
+                                <span class="kpi-card__label">Durée médiane</span>
+                                <span class="kpi-icon kpi-icon--navy" aria-hidden="true">⌁</span>
+                            </div>
+                            <strong id="kpi-resolution-median" class="kpi-card__value">—</strong>
+                            <span class="kpi-card__caption">temps de résolution</span>
+                        </article>
+                    </section>
+
+                    <section class="chart-grid" aria-label="Analyses et répartitions">
+                        <article class="chart-card chart-card--wide">
+                            <header class="chart-card__header">
+                                <div>
+                                    <p class="eyebrow">TENDANCE</p>
+                                    <h2>Évolution des résolutions</h2>
+                                    <p class="chart-description">Durée moyenne et volume par date de ticket</p>
+                                </div>
+                                <span class="chart-unit">Minutes · tickets</span>
+                            </header>
+                            <div id="chart-temporal" class="chart-body chart-body--temporal"></div>
+                            <footer class="chart-legend">
+                                <span><i class="legend-dot legend-dot--cyan"></i>Durée moyenne (min)</span>
+                                <span class="chart-legend__note">Le volume par date est indiqué dans les infobulles.</span>
+                            </footer>
+                        </article>
+
+                        <article class="chart-card">
+                            <header class="chart-card__header">
+                                <div>
+                                    <p class="eyebrow">RÉPARTITION</p>
+                                    <h2>Par priorité</h2>
+                                </div>
+                                <span class="chart-unit">Tickets</span>
+                            </header>
+                            <div id="chart-priorities" class="chart-body"></div>
+                        </article>
+
+                        <article class="chart-card">
+                            <header class="chart-card__header">
+                                <div>
+                                    <p class="eyebrow">RÉPARTITION</p>
+                                    <h2>Par technicien</h2>
+                                </div>
+                                <span class="chart-unit">Tickets</span>
+                            </header>
+                            <div id="chart-technicians" class="chart-body"></div>
+                        </article>
+
+                        <article class="chart-card">
+                            <header class="chart-card__header">
+                                <div>
+                                    <p class="eyebrow">RÉPARTITION</p>
+                                    <h2>Par client</h2>
+                                </div>
+                                <span class="chart-unit">Tickets</span>
+                            </header>
+                            <div id="chart-clients" class="chart-body chart-body--dimensions"></div>
+                        </article>
+
+                        <article class="chart-card">
+                            <header class="chart-card__header">
+                                <div>
+                                    <p class="eyebrow">RÉPARTITION</p>
+                                    <h2>Par problématique</h2>
+                                </div>
+                                <span class="chart-unit">Tickets</span>
+                            </header>
+                            <div id="chart-problems" class="chart-body chart-body--dimensions"></div>
+                        </article>
+                    </section>
+                </section>
+            </main>
+
+            <main id="reference-registry-view" class="workspace" hidden>
+                <header class="page-header">
+                    <div>
+                        <p class="eyebrow">RÉFÉRENCES SECONDAIRES <span aria-hidden="true">/</span> MESSAGES</p>
+                        <h1>Recherche de tickets mentionnés</h1>
+                        <p class="page-description">Consultez les références textuelles et leur provenance sans les confondre avec les données analytiques SLA.</p>
+                    </div>
+                    <div class="page-meta page-meta--secondary">
+                        <span class="page-meta__dot" aria-hidden="true"></span>
+                        <span>Hors indicateurs SLA</span>
+                    </div>
+                </header>
+
+                <aside class="registry-notice" role="note">
+                    Ces informations proviennent de messages. Les horodatages sont ceux des messages, les durées et statuts mentionnés ne sont pas vérifiés, et l’expéditeur n’est pas nécessairement le créateur ou le technicien du ticket.
+                </aside>
+
+                <section class="registry-search" aria-labelledby="registry-search-title">
+                    <h2 id="registry-search-title">Rechercher un identifiant</h2>
+                    <form id="registry-search-form" class="registry-search__form">
+                        <div class="filter-field registry-search__query">
+                            <label for="registry-query">Identifiant du ticket</label>
+                            <input id="registry-query" type="search" maxlength="32" autocomplete="off" placeholder="Ex. P260904012" required>
+                        </div>
+                        <div class="filter-field registry-search__mode">
+                            <label for="registry-search-mode">Type de recherche</label>
+                            <select id="registry-search-mode">
+                                <option value="partial">Contient</option>
+                                <option value="exact">Exacte</option>
+                            </select>
+                        </div>
+                        <button id="registry-search-submit" class="button button--primary" type="submit">Rechercher</button>
+                    </form>
+                </section>
+
+                <div id="registry-loading" class="feedback feedback--loading" role="status" aria-live="polite" hidden>
+                    <span class="spinner" aria-hidden="true"></span>
+                    <span>Recherche dans les références…</span>
+                </div>
+                <div id="registry-error" class="feedback feedback--error" role="alert" hidden>
+                    <div class="feedback__message">
+                        <strong>Le registre n’a pas pu être chargé.</strong>
+                        <span id="registry-error-message"></span>
+                    </div>
+                    <button id="registry-retry" class="button button--secondary" type="button">Réessayer</button>
+                </div>
+
+                <section id="registry-results" class="registry-results" aria-live="polite" hidden>
+                    <div class="registry-results__header">
+                        <h2>Identifiants correspondants</h2>
+                        <p id="registry-results-count" class="section-description"></p>
+                    </div>
+                    <p id="registry-initial" class="registry-empty">Saisissez un identifiant pour consulter les références de messages associées.</p>
+                    <p id="registry-empty" class="registry-empty" hidden>Aucun identifiant ne correspond à cette recherche.</p>
+                    <ul id="registry-result-list" class="registry-result-list"></ul>
+                </section>
+
+                <div id="registry-detail-loading" class="feedback feedback--loading" role="status" aria-live="polite" hidden>
+                    <span class="spinner" aria-hidden="true"></span>
+                    <span>Chargement des messages associés…</span>
+                </div>
+                <div id="registry-detail-error" class="feedback feedback--error" role="alert" hidden>
+                    <div class="feedback__message">
+                        <strong>Les messages n’ont pas pu être chargés.</strong>
+                        <span id="registry-detail-error-message"></span>
+                    </div>
+                    <button id="registry-detail-retry" class="button button--secondary" type="button">Réessayer</button>
+                </div>
+                <section id="registry-detail" class="registry-detail" aria-live="polite" hidden></section>
+            </main>
+        </div>
+
+        <footer class="app-footer">
+            <span><strong>IRIS</strong> · Dashboard Suivi Help Desk</span>
+            <span>v{{ version }}</span>
+        </footer>
+    </div>
+
+    <script type="module" src="{{ url_for('static', path='js/app.js') }}"></script>
+</body>
+</html>

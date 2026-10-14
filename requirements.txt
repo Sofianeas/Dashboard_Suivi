@@ -1,0 +1,11 @@
+pandas>=2.2,<3
+openpyxl>=3.1,<4
+google-api-python-client>=2.180,<3
+google-auth>=2.40,<3
+fastapi>=0.143,<1
+uvicorn>=0.54,<1
+pydantic>=2,<3
+jinja2>=3.1,<4
+pytest>=8,<10
+# Test-only dependency used by Starlette's TestClient.
+httpx2>=2,<3
