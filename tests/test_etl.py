@@ -1,13 +1,118 @@
-from pathlib import Path
+
 import pandas as pd
 import pytest
-from src.ingestion.google_sheets import load_from_xlsx
-from src.transformation.durations import parse_duration_minutes
+
+from src.transformation import pipeline
 from src.transformation.dates import parse_datetime
+from src.transformation.durations import parse_duration_minutes
 from src.transformation.pipeline import transform_tickets
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-XLSX = PROJECT_ROOT / "data" / "raw" / "Suivi_HelpDesk1.xlsx"
+
+REFERENCE_TICKET = "P111111111"
+BUSINESS_TICKET = "P222222222"
+STANDARD_TICKET = "P333333333"
+
+
+def make_ticket(
+    ticket_id,
+    *,
+    client="CLIENT TEST",
+    problem="Incident",
+    priority="Moyenne",
+    opened="23/06/2026 à 9h40",
+    resolved="23/06/2026 à 10h00",
+    duration="20min",
+    reference_duration=None,
+    technician="Sofiane Aoues",
+):
+    """Construit une ligne de ticket entièrement fictive."""
+    return {
+        "Date du ticket": "23/06/2026",
+        "N° Ticket": ticket_id,
+        "Client": client,
+        "Problématique": problem,
+        "Priorité": priority,
+        "Date/Heure ouverture": opened,
+        "Date/Heure résolution": resolved,
+        "Temps de résolution (h)": duration,
+        "Temps de résolution (min)": reference_duration,
+        "Technicien": technician,
+    }
+
+
+@pytest.fixture
+def synthetic_etl_data(monkeypatch):
+    """Prépare des données synthétiques sans lire de fichier opérationnel."""
+    monkeypatch.setattr(
+        pipeline,
+        "REFERENCE_DURATION_TICKETS",
+        {REFERENCE_TICKET},
+    )
+
+    monkeypatch.setattr(
+        pipeline,
+        "BUSINESS_OVERRIDES",
+        {
+            BUSINESS_TICKET: {
+                "client_analytic": "CLIENT TEST",
+                "problem_analytic": "Installation/Formation",
+                "resolution_minutes": 4.0,
+                "business_decision": (
+                    "Validation métier synthétique : 4 min"
+                ),
+            }
+        },
+    )
+
+    tickets = pd.DataFrame(
+        [
+            make_ticket(
+                REFERENCE_TICKET,
+                duration="99min",
+                reference_duration=19,
+            ),
+            make_ticket(
+                BUSINESS_TICKET,
+                client="CLIENT TEST",
+                problem="Installation",
+                duration="3min",
+                opened="23/06/2026 à 15h00",
+                resolved="23/06/2026 à 15h03",
+            ),
+            make_ticket(
+                STANDARD_TICKET,
+                client="CLIENT TEST",
+                problem="Installation",
+                duration="5min",
+                opened="23/06/2026 à 11h00",
+                resolved="23/06/2026 à 11h05",
+            ),
+        ]
+    )
+
+    clients = pd.DataFrame(
+        [
+            {
+                "client_source_normalized": "CLIENT TEST",
+                "client_analytic": "CLIENT TEST",
+            }
+        ]
+    )
+
+    problems = pd.DataFrame(
+        [
+            {
+                "problem_source": "Incident",
+                "problem_analytic": "Incident",
+            },
+            {
+                "problem_source": "Installation",
+                "problem_analytic": "Installation",
+            },
+        ]
+    )
+
+    return tickets, clients, problems
 
 
 def test_duration_formats():
@@ -22,83 +127,80 @@ def test_date_formats():
     assert parse_datetime("23/06/2026 à 10:44").minute == 44
 
 
-def test_current_export_dataset_contract():
-    tickets, clients, problems = load_from_xlsx(XLSX)
-    result = transform_tickets(tickets, clients, problems)
-    assert len(result) == 717
-    assert result["ticket_id"].nunique() == 709
-    assert result["exact_duplicate"].sum() == 4
-    assert result["client_analytic"].isna().sum() == 13
-    assert result["problem_analytic"].isna().sum() == 3
-    assert result["priority_analytic"].isna().sum() == 0
-    assert result["resolution_minutes"].notna().all()
-    assert result["opened_at"].notna().sum() == 717
-    assert result["resolved_at"].notna().sum() == 716
-    assert set(result["priority_analytic"]) <= {"Basse", "Moyenne", "Haute"}
-    assert set(result["technician_analytic"]) <= {"Loubna", "Sofiane Aoues"}
+def test_reference_duration_overrides_raw_duration(synthetic_etl_data):
+    tickets, clients, problems = synthetic_etl_data
+
+    result = transform_tickets(
+        tickets, clients, problems
+    ).set_index("ticket_id")
+
+    assert result.loc[REFERENCE_TICKET, "resolution_minutes"] == 19
+    assert result.loc[REFERENCE_TICKET, "resolution_minutes_raw"] == "99min"
+    assert (
+        result.loc[REFERENCE_TICKET, "resolution_minutes_reference_raw"]
+        == 19
+    )
+    assert (
+        result.loc[REFERENCE_TICKET, "resolution_minutes_origin"]
+        == "reference_column_j"
+    )
 
 
-def test_reference_durations_override_only_the_two_known_tickets():
-    tickets, clients, problems = load_from_xlsx(XLSX)
-    result = transform_tickets(tickets, clients, problems).set_index("ticket_id")
+def test_business_override_preserves_raw_data(synthetic_etl_data):
+    tickets, clients, problems = synthetic_etl_data
 
-    assert result.loc["P260604283", "resolution_minutes"] == 19
-    assert result.loc["P260604317", "resolution_minutes"] == 21
-    assert result.loc["P260604283", "resolution_minutes_raw"].hour == 16
-    assert result.loc["P260604283", "resolution_minutes_raw"].minute == 0
-    assert result.loc["P260604283", "resolution_minutes_reference_raw"] == 19
-    assert result.loc["P260604283", "resolution_minutes_origin"] == "reference_column_j"
-    assert result.loc["P260604317", "resolution_minutes_origin"] == "reference_column_j"
-    assert result.loc["P260604023", "resolution_minutes"] == pytest.approx(41.233333)
-    assert result.loc["P260604229", "resolution_minutes"] == 35
-    assert result.loc["P260604268", "resolution_minutes"] == 30
+    result = transform_tickets(
+        tickets, clients, problems
+    ).set_index("ticket_id")
 
+    target = result.loc[BUSINESS_TICKET]
 
-def test_reference_duration_column_is_required_for_target_tickets():
-    tickets, clients, problems = load_from_xlsx(XLSX)
-    tickets = tickets.drop(columns=["Temps de résolution (min)"])
-
-    with pytest.raises(ValueError, match="Colonne de référence des durées absente"):
-        transform_tickets(tickets, clients, problems)
-
-
-def test_ticket_business_override_preserves_raw_data_and_does_not_change_other_installations():
-    tickets, clients, problems = load_from_xlsx(XLSX)
-    result = transform_tickets(tickets, clients, problems).set_index("ticket_id")
-
-    target = result.loc["P260904149"]
-    assert target["client_raw"] == "L'addition"
-    assert target["client_analytic"] == "L'addition"
+    assert target["client_raw"] == "CLIENT TEST"
     assert target["problem_raw"] == "Installation"
     assert target["problem_analytic"] == "Installation/Formation"
     assert target["resolution_minutes_raw"] == "3min"
-    assert pd.isna(target["resolution_minutes_reference_raw"])
     assert target["resolution_minutes"] == 4
     assert target["resolution_minutes_origin"] == "business_validated"
     assert target["business_decision"] == (
-        "Validation métier : L'addition / Installation/Formation / 4 min"
+        "Validation métier synthétique : 4 min"
     )
-    assert str(target["ticket_date"].date()) == "2026-09-17"
-    assert target["opened_at"].strftime("%Y-%m-%d %H:%M:%S") == "2026-09-17 15:00:00"
-    assert target["resolved_at"].strftime("%Y-%m-%d %H:%M:%S") == "2026-09-17 15:03:00"
-    assert target["priority_analytic"] == "Basse"
 
-    assert result["business_decision"].notna().sum() == 1
-    assert result["resolution_minutes_origin"].eq("business_validated").sum() == 1
+    unrelated = result.loc[STANDARD_TICKET]
 
-    unrelated_installation = result.loc["P260604398"]
-    assert unrelated_installation["client_analytic"] == "ADOPT"
-    assert unrelated_installation["problem_analytic"] == "Installation"
-    assert unrelated_installation["resolution_minutes"] == 5
-    assert unrelated_installation["resolution_minutes_origin"] == "explicit"
+    assert unrelated["problem_analytic"] == "Installation"
+    assert unrelated["resolution_minutes"] == 5
+    assert unrelated["resolution_minutes_origin"] == "explicit"
 
 
-@pytest.mark.parametrize("invalid_value", [None, "invalid"])
-def test_invalid_reference_duration_raises_for_target_ticket(invalid_value):
-    tickets, clients, problems = load_from_xlsx(XLSX)
-    tickets["Temps de résolution (min)"] = tickets["Temps de résolution (min)"].astype(object)
-    target_row = tickets["N° Ticket"].astype(str).str.strip().eq("P260604283")
+def test_reference_duration_column_is_required_for_target_ticket(
+    synthetic_etl_data,
+):
+    tickets, clients, problems = synthetic_etl_data
+    tickets = tickets.drop(columns=["Temps de résolution (min)"])
+
+    with pytest.raises(
+        ValueError,
+        match="Colonne de référence des durées absente",
+    ):
+        transform_tickets(tickets, clients, problems)
+
+
+@pytest.mark.parametrize("invalid_value", [None, "invalid", -1, float("inf")])
+def test_invalid_reference_duration_raises(
+    synthetic_etl_data,
+    invalid_value,
+):
+    tickets, clients, problems = synthetic_etl_data
+
+    tickets["Temps de résolution (min)"] = (
+        tickets["Temps de résolution (min)"].astype(object)
+    )
+
+    target_row = tickets["N° Ticket"].eq(REFERENCE_TICKET)
     tickets.loc[target_row, "Temps de résolution (min)"] = invalid_value
 
-    with pytest.raises(ValueError, match="Référence de durée en minutes invalide.*P260604283"):
+    with pytest.raises(
+        ValueError,
+        match="Référence de durée en minutes invalide",
+    ):
         transform_tickets(tickets, clients, problems)
