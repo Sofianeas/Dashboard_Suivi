@@ -1,0 +1,15 @@
+{
+  "project": "Dashboard_Suivi",
+  "recovery_date": "2026-09-26",
+  "known_last_validated_test_count": 63,
+  "validated_stages": [
+    "AF-005.1-A",
+    "AF-005.1-B",
+    "AF-005.2-A",
+    "AF-005.2-B"
+  ],
+  "next_stage": "AF-005.2-C",
+  "surviving_source_zip": "Dashboard_Suivi.zip",
+  "postgres_sql_exactly_recovered": false,
+  "notes": "Current app layer reconstructed from confirmed project contracts/history; surviving ETL/data files preserved."
+}
