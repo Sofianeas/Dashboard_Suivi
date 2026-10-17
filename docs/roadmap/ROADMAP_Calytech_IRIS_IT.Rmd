@@ -1,0 +1,426 @@
+---
+title: "Calytech / IRIS-IT — Roadmap technique et fonctionnelle"
+subtitle: "Référentiel de pilotage du projet"
+author: "Référentiel de travail — à valider par le Product Owner"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    theme: readable
+  word_document:
+    toc: true
+  pdf_document:
+    toc: true
+lang: fr
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# 1. Objet et règles de lecture
+
+Ce document constitue le référentiel central de suivi du chantier **Calytech / IRIS-IT**. Il rassemble la vision d'architecture, la roadmap, les responsabilités, les critères de validation et le processus de travail pour l'application, le backend de données et les fonctions d'intelligence artificielle.
+
+Il est destiné à être conservé dans le dépôt Git, consulté régulièrement et mis à jour au fil des phases.
+
+- **État documenté :** information issue des documents de projet disponibles.
+- **État confirmé :** élément appuyé par une commande, un test, un commit ou une validation explicitement rapportée.
+- **À auditer :** point dont l'état réel doit être vérifié dans le dépôt.
+- **Proposition :** trajectoire recommandée à approuver avant d'en faire une décision.
+
+> Règle de gouvernance : ne pas déclarer une étape terminée uniquement parce que le code a été écrit. Il faut des tests, des preuves et une validation fonctionnelle ; tout changement d'interface requiert aussi une validation visuelle réelle.
+
+# 2. État de référence connu
+
+## 2.1 Git et dépôt
+
+Dépôt local utilisé lors des dernières vérifications :
+
+`C:\Users\SofianeAOUESExterne\Desktop\Dashboard_Suivi`
+
+Derniers commits locaux rapportés :
+
+| Commit | Objet |
+|---|---|
+| `acc1429` | `test: isolate API ETL and reference registry fixtures` |
+| `91efdf0` | `test: restore operational export validation coverage` |
+
+État rapporté à cette date : branche `master` en avance de deux commits sur `origin/master`, arbre de travail propre. Dernier commit distant connu : `560204d docs: document project recovery status`. Aucun push de ces deux commits n'a été confirmé. Ces données sont un instantané historique et doivent être revérifiées avant toute opération Git.
+
+```powershell
+git fetch origin
+git status -sb
+git log --oneline --left-right origin/master...HEAD
+git diff --check
+```
+
+Ne pas pousser de commits sans autorisation explicite.
+
+## 2.2 Tests du backend / ETL rapportés
+
+| Contrôle | Commande | Résultat rapporté |
+|---|---|---|
+| Suite par défaut | `python -m pytest -q` | `23 passed, 6 deselected` |
+| Tests opérationnels | `python -m pytest -o addopts= -m operational tests/validation -q` | `6 passed` |
+| Contrôle de patch | `git diff --check` | Aucun problème signalé |
+
+Le `pytest.ini` rapporté exclut les tests `operational` de la suite par défaut :
+
+```ini
+[pytest]
+pythonpath = .
+testpaths = tests
+addopts = -m "not operational"
+markers =
+    operational: validation de l export opérationnel réel et de ses règles métier
+```
+
+Le fichier opérationnel mentionné était `data/raw/Suivi_HelpDesk1.xlsx`. Avant une livraison, relancer les tests dans l'environnement courant et conserver les sorties comme preuves. Les résultats historiques ne garantissent pas les résultats du dépôt actuel.
+
+## 2.3 Périmètre à clarifier
+
+Les documents de cadrage décrivent notamment **IRIS Copilot** et son *Application Framework*, tandis que les commits récents concernent `Dashboard_Suivi`, l'ETL, l'API, le registre de références et les tests opérationnels. Ne pas supposer que ces éléments appartiennent déjà au même sous-système ou sont intégrés. La cartographie réelle et les points d'intégration doivent être audités avant toute modification.
+
+# 3. Vision d'architecture cible
+
+## 3.1 Trois chantiers complémentaires
+
+| Chantier | Périmètre | Résultat attendu |
+|---|---|---|
+| A — Application & UI | Design system, shell, navigation, pages, UX | Interface cohérente et extensible |
+| B — Données & Backend | Ingestion, ETL, contrats, règles métier, API, stockage, qualité | Données fiables, traçables et testables |
+| C — Intelligence & Agents | Analyse de mails, génération de tickets, RAG, orchestration, évaluation | Assistance IA contrôlée, mesurable et explicable |
+
+Les chantiers peuvent avancer en parallèle si leurs contrats d'interface sont clairs. Les dépendances doivent être explicites et validées.
+
+## 3.2 Flux de données cible — proposition à confirmer
+
+```{mermaid}
+flowchart TD
+    A["Sources opérationnelles"] --> B["Ingestion"]
+    B --> C["Validation des contrats"]
+    C --> D["Transformations ETL"]
+    D --> E["Règles métier et référentiels"]
+    E --> F["Contrôles qualité"]
+    F --> G["Dataset analytique"]
+    G --> H["Services / API"]
+    H --> I["Dashboard et pages UI"]
+    H --> J["Agents IA via interfaces publiques"]
+    J --> K["Validation humaine"]
+    K --> L["Action métier / traçabilité"]
+```
+
+Ce schéma représente une cible de conception, pas une affirmation que chaque composant existe déjà.
+
+## 3.3 Principes d'architecture
+
+1. Responsabilité unique par module.
+2. Séparation entre interface et logique métier.
+3. Pages légères : elles orchestrent, les services exécutent.
+4. Contrats explicites et testés entre modules.
+5. Couplage faible avec les agents IA via des interfaces publiques.
+6. Traçabilité des transformations et des décisions.
+7. Reproductibilité des tests et traitements.
+8. Secrets hors du code, permissions minimales et minimisation des données.
+9. Validation humaine pour les actions sensibles proposées par l'IA.
+10. Chaque étape annonce ses fichiers, objectifs, risques et critères de sortie.
+
+# 4. Roadmap globale
+
+| Phase | Intitulé | Objectif | État de référence |
+|---|---|---|---|
+| 00 | Stabilisation et audit | Établir l'état réel, les tests, les dépendances et les risques | À vérifier / maintenir |
+| 01 | Socle UI / Design System | Stabiliser les composants visuels réutilisables | Déclaré stable dans les documents ; à confirmer dans le dépôt |
+| 02 | Application Framework | Shell, session, navigation, layout, conventions | Prochaine phase documentée |
+| 03 | Modernisation des pages métier | Migrer les pages vers les conventions communes | Après stabilisation du framework |
+| 04 | Industrialisation Data & Backend | Contrats, ETL, API, stockage, observabilité | Chantier parallèle ; audit requis |
+| 05 | Intelligence & Agents | Intégrer des cas d'usage IA | État à auditer |
+| 06 | Intégration, sécurité et production | Valider le système intégré et son exploitation | À planifier |
+
+## 4.1 Phase 00 — Stabilisation et audit
+
+Livrables : état Git et branches vérifiés ; arborescence des modules ; inventaire des points d'entrée ; tests de référence exécutés ; décisions et écarts documentés ; distinction entre faits et hypothèses.
+
+Critères de sortie : état du dépôt reproductible, aucun changement non validé en cours, périmètre et prochaines étapes acceptés.
+
+## 4.2 Phase 01 — Socle UI / Design System
+
+Les documents déclarent stables : thème, typographie, layout, cartes, badges, alertes, métriques, tableaux, timeline, navigation, sidebar, formulaires, icônes, API publique `app.ui` et galerie `ui_showcase.py` (*Living Style Guide*).
+
+À vérifier dans le dépôt : présence effective, API publique, tests, cohérence du rendu visuel et éventuelles dépendances implicites.
+
+## 4.3 Phase 02 — Application Framework
+
+Le détail des sous-phases AF-001 à AF-007 figure à la section 5.
+
+## 4.4 Phase 03 — Modernisation des pages métier
+
+Pages citées dans le cadrage : `analyse_mail.py`, `documentation.py`, `generation_ticket.py`, `historique.py`. Vérifier leur présence et leur état avant de décider de l'ordre de migration. Réutiliser le shell, la navigation et les conventions validés ; ne pas déplacer la logique métier dans l'interface.
+
+## 4.5 Phase 04 — Industrialisation Data & Backend
+
+- **B1 — Contrats de données :** schémas, colonnes obligatoires, types, valeurs autorisées, nullité et versionnement.
+- **B2 — Pipeline ETL :** ingestion, validation, transformation, règles métier, contrôles qualité et dataset analytique.
+- **B3 — API et services :** contrats, filtres, pagination si utile, erreurs explicites, tests d'intégration et authentification.
+- **B4 — Stockage :** examiner `ETL03_DATABASE_DESIGN.md`, `POSTGRESQL_RECONSTRUCTION.md` et les documents de récupération avant de conclure sur une migration PostgreSQL.
+- **B5 — Analytique avancée :** explicabilité des SLA, anomalies, analyse des causes, prévisions de référence, score qualité et simulations.
+
+Exigences transversales : idempotence lorsque pertinente ; logs exploitables et identifiants de corrélation ; provenance et fraîcheur des données ; séparation entre validation de format et règles métier ; tests synthétiques isolés des fichiers opérationnels ; gestion explicite des erreurs ; aucune donnée sensible dans les logs.
+
+## 4.6 Phase 05 — Intelligence & Agents
+
+| Identifiant | Sujet | Attendu |
+|---|---|---|
+| IA-001 | Audit de l'existant | Inventaire agents, prompts, workflows, mémoire, RAG et dépendances |
+| IA-002 | Interfaces indépendantes du fournisseur | Contrats stables pour changer de modèle ou fournisseur |
+| IA-003 | Analyse de mails | Extraction structurée, résumé, classification et incertitudes explicites |
+| IA-004 | Génération de tickets | Proposition structurée et validation humaine avant création |
+| IA-005 | RAG documentaire | Réponses avec sources traçables |
+| IA-006 | Orchestration | Flux contrôlés, états explicites, reprise et gestion d'erreurs |
+| IA-007 | Évaluation et gouvernance | Qualité, latence, coût, robustesse, sécurité et contrôle humain |
+
+Contrôles : évaluation sur des cas représentatifs ; mesure des erreurs ; protection contre l'injection de prompt ; minimisation des données ; suivi latence/coût/échecs ; validation humaine des actions sensibles.
+
+## 4.7 Phase 06 — Intégration et préparation production
+
+Prévoir : tests d'intégration UI/services/API/ETL/agents ; authentification et autorisation ; gestion des secrets ; contrôle des données sensibles ; logs et alertes ; performance et résilience ; déploiement et retour arrière ; sauvegardes ; documentation d'exploitation ; recette métier complète.
+
+# 5. Phase 02 — Application Framework : AF-001 à AF-007
+
+## AF-001 — Architecture du framework
+
+**Nature : conception et audit ; pas de modification de code à cette étape**, sauf décision explicite ultérieure.
+
+Livrables :
+- architecture logique et responsabilités des modules ;
+- flux réel de `main.py` jusqu'aux pages, services et agents ;
+- contrats, interfaces et diagramme des dépendances autorisées/interdites ;
+- stratégie d'initialisation, session, navigation et gestion des erreurs ;
+- organisation cible de `app.shell` ;
+- plan de validation AF-002 à AF-007 ;
+- maquette de référence du shell et de l'accueil.
+
+Critères de sortie : responsabilités compréhensibles, dépendances interdites identifiées, interfaces publiques définies, tests planifiés, architecture approuvée par le Product Owner avant implémentation.
+
+## AF-002 — Shell applicatif
+
+Initialiser l'application, assembler les composants globaux et intégrer le shell avec `main.py`, sans logique métier. Validation : démarrage, rendu, absence de régression, tests automatisés et capture d'écran.
+
+## AF-003 — Session
+
+Centraliser l'accès à `st.session_state` pour les données pertinentes : utilisateur, paramètres, contexte, état de traitement et préférences. Valider l'initialisation déterministe, les valeurs absentes, les changements de session et les états visuels associés.
+
+## AF-004 — Navigation
+
+Centraliser la définition des pages, assurer une navigation cohérente et faciliter l'extension. L'ajout d'une page par configuration n'est un critère que si l'audit confirme cette architecture. Valider navigation, page active, routes inconnues et permissions éventuelles.
+
+## AF-005 — Layout global
+
+Éléments cibles : en-tête, sidebar, espace de travail et pied de page optionnel. Valider espacement, tailles d'écran retenues, absence de chevauchement et états de chargement, d'erreur et de contenu vide.
+
+## AF-006 — Accueil Dashboard
+
+Éléments envisagés : présentation d'IRIS Copilot, raccourcis, statistiques, tickets/activité récents, notifications et accès rapide. Chaque métrique doit avoir une définition métier et une source. Ne jamais présenter de chiffres fictifs comme des données réelles. Valider les liens, les données, les états vides/chargement/erreur et la lisibilité.
+
+## AF-007 — Conventions de pages
+
+Convention envisagée, à adapter à la structure réelle :
+
+```python
+def configure_page():
+    ...
+
+def render_header():
+    ...
+
+def render_filters():
+    ...
+
+def render_content():
+    ...
+
+def render_actions():
+    ...
+```
+
+Valider l'exemple de page, la séparation présentation/métier, les tests et les dépendances. Ne pas imposer des fonctions inutiles à une page.
+
+# 6. Validation obligatoire à chaque étape
+
+## 6.1 Cycle de travail
+
+1. **Audit** des fichiers et de l'architecture concernés.
+2. **Objectif** et critères d'acceptation explicites.
+3. **Plan limité** : fichiers, risques, tests et dépendances.
+4. **Implémentation** dans le périmètre accepté.
+5. **Tests automatisés** adaptés : unitaires, intégration, contrats ou règles métier.
+6. **Contrôles statiques** disponibles et `git diff --check`.
+7. **Validation visuelle réelle** si l'UI est modifiée.
+8. **Recette fonctionnelle** incluant les erreurs et états vides pertinents.
+9. **Revue du diff**, des risques et des régressions.
+10. **Décision du Product Owner** : acceptation ou corrections.
+11. **Clôture documentée** avec commandes, résultats, captures et limites.
+
+## 6.2 Test visuel
+
+Le test visuel est obligatoire après chaque phase qui modifie l'interface. Il est également requis après une modification backend qui change les données, états ou comportements visibles du dashboard.
+
+Niveaux :
+- composant isolé via la galerie UI, si disponible ;
+- page en état normal, chargement, vide et erreur selon le besoin ;
+- application complète et navigation ;
+- comparaison de captures avec une référence si l'outillage le permet.
+
+Choisir Playwright ou une méthode adaptée à Streamlit après l'audit du dépôt. Ne pas supposer qu'un outil est déjà configuré.
+
+## 6.3 Preuves à conserver
+
+| Élément | Preuve |
+|---|---|
+| Code | Commit ou diff examiné |
+| Tests | Commandes et résultats complets |
+| Qualité | Contrôles statiques disponibles |
+| Visuel | Captures et scénarios vérifiés |
+| Fonctionnel | Cas de recette et résultat observé |
+| Risques | Limites, régressions possibles, décisions |
+| Approbation | Validation ou réserves du Product Owner |
+
+# 7. Rôles et cycle de collaboration
+
+| Rôle | Responsabilités |
+|---|---|
+| Product Owner / utilisateur | Besoin, arbitrages métier, recette et approbation |
+| ChatGPT — Lead technique / architecte | Roadmap, architecture, critères d'acceptation, revue et risques |
+| Claude — développeur senior | Audit des fichiers fournis, plan, implémentation autorisée, tests et documentation |
+
+Cycle commun : **Audit → Analyse → Plan → Implémentation → Validation → Recommandations**.
+
+Règles : ne pas prétendre avoir inspecté le dépôt local sans accès aux fichiers ; ne pas inventer de résultats de tests ; ne pas pousser sans autorisation ; séparer faits et hypothèses ; demander une décision pour tout choix affectant architecture, données ou métier.
+
+# 8. Pistes d'innovation
+
+Ces pistes sont des propositions, pas des fonctionnalités promises.
+
+## 8.1 Dashboard orienté décision
+
+KPI avec définitions métier ; suivi des SLA et retards ; filtres adaptés aux usages ; vues par priorité, type, équipe ou période ; alertes explicables ; distinction entre données réelles, estimations et données indisponibles.
+
+## 8.2 Intelligence opérationnelle
+
+Détection d'anomalies ; analyse des causes des dépassements de SLA ; prévisions simples servant de baseline ; simulation de scénarios ; score de qualité explicable. Tout modèle prédictif doit être évalué contre une baseline, sur des données adaptées, et surveillé contre la dérive. Une corrélation n'est pas une preuve de causalité.
+
+## 8.3 Assistance IA contrôlée
+
+Extraction structurée de mails ; proposition de reformulation ou de ticket ; recherche documentaire avec citations ; recommandations avec incertitude explicite ; validation humaine avant toute action métier sensible.
+
+# 9. Prochaine étape recommandée : AF-001
+
+Après vérification de l'état du dépôt et clarification du périmètre entre `Dashboard_Suivi` et IRIS Copilot, réaliser l'audit AF-001 en lecture seule.
+
+## 9.1 Commandes d'audit initial
+
+À exécuter depuis la racine du dépôt :
+
+```powershell
+git fetch origin
+git status -sb
+git log --oneline --left-right origin/master...HEAD
+git diff --check
+
+Get-ChildItem -Force
+Get-ChildItem .\app -Recurse -File -ErrorAction SilentlyContinue |
+    Select-Object FullName
+Get-ChildItem .\src -Recurse -File -ErrorAction SilentlyContinue |
+    Select-Object FullName
+
+Get-Content .\main.py -ErrorAction SilentlyContinue
+Get-Content .\README.md -ErrorAction SilentlyContinue
+```
+
+Recherche des documents de conception/récupération :
+
+```powershell
+Get-ChildItem -Recurse -File |
+    Where-Object {
+        $_.Name -match 'ETL02_DECISIONS|ETL02_SPEC|ETL03_DATABASE_DESIGN|POSTGRESQL_RECONSTRUCTION|RECOVERY_STATUS|RECUPERATION_ETAT|RECOVERY_MANIFEST'
+    } |
+    Select-Object FullName
+```
+
+Ces commandes sont des instructions pour une exécution locale ; leur présence ici ne signifie pas qu'elles ont été exécutées lors de la génération du document.
+
+## 9.2 Livrables AF-001 attendus
+
+1. Inventaire des modules et points d'entrée.
+2. Flux d'exécution réel de `main.py` aux pages/services.
+3. Carte des dépendances actuelles et cibles.
+4. Stratégies de session, navigation, erreurs et configuration.
+5. Interfaces publiques entre UI, backend et agents.
+6. Écarts entre architecture existante et cible.
+7. Plan de tests automatisés et visuels AF-002 à AF-007.
+8. Proposition de shell et d'accueil avec référence visuelle.
+9. Décisions à soumettre au Product Owner.
+
+**Pas de modification de code pendant AF-001**, sauf autorisation explicite après examen des résultats de l'audit.
+
+# 10. Journal des décisions et des phases
+
+À mettre à jour après chaque validation importante.
+
+| Date | Phase / identifiant | Décision ou résultat | Preuve | Validé par |
+|---|---|---|---|---|
+| À compléter | Phase 00 | État Git et tests à revérifier dans le dépôt courant | Commandes Git et tests | À compléter |
+| À compléter | AF-001 | Audit d'architecture à réaliser | Rapport et diagrammes | À compléter |
+
+## Modèle de clôture d'une phase
+
+- **Phase / identifiant :**
+- **Objectif :**
+- **Fichiers examinés :**
+- **Fichiers modifiés :**
+- **Décisions approuvées :**
+- **Tests exécutés et résultats :**
+- **Contrôles statiques :**
+- **Validation visuelle / captures :**
+- **Recette fonctionnelle :**
+- **Risques et limites restantes :**
+- **Commit(s) associé(s) :**
+- **Validation du Product Owner :**
+- **Prochaine étape autorisée :**
+
+# Annexe A — Règles Git et livraison
+
+Avant une modification :
+
+```powershell
+git status -sb
+git log -5 --oneline
+```
+
+Après une modification, adapter les tests au composant concerné :
+
+```powershell
+git diff --check
+git diff --stat
+git diff
+python -m pytest -q
+python -m pytest -o addopts= -m operational tests/validation -q
+```
+
+Avant un commit : vérifier le périmètre, examiner les suppressions de contrôles métier, vérifier que les tests n'affaiblissent pas la validation et conserver les preuves visuelles lorsque l'UI est concernée.
+
+Avant un push : vérifier le remote, examiner les commits locaux et distants, résoudre les divergences de façon contrôlée et obtenir l'approbation requise.
+
+# Annexe B — Maintien du référentiel
+
+À chaque changement important :
+1. mettre à jour le statut des phases ;
+2. remplacer les résultats historiques par des résultats récents datés ;
+3. référencer commits, tests et captures ;
+4. documenter les décisions d'architecture ;
+5. maintenir une liste explicite des risques et points non résolus.
+
+Ne jamais transformer une hypothèse en fait confirmé sans preuve.
