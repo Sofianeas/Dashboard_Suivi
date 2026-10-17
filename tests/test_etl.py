@@ -6,6 +6,7 @@ from src.transformation import pipeline
 from src.transformation.dates import parse_datetime
 from src.transformation.durations import parse_duration_minutes
 from src.transformation.pipeline import transform_tickets
+from src.validation.quality import quality_report
 
 
 REFERENCE_TICKET = "P111111111"
@@ -203,4 +204,83 @@ def test_invalid_reference_duration_raises(
         ValueError,
         match="Référence de durée en minutes invalide",
     ):
+        transform_tickets(tickets, clients, problems)
+
+
+def test_transform_output_is_compatible_with_quality_report(synthetic_etl_data):
+    """Vérifie le contrat de bout en bout sur les lignes synthétiques valides."""
+    tickets, clients, problems = synthetic_etl_data
+
+    transformed = transform_tickets(tickets, clients, problems)
+    report = quality_report(transformed)
+
+    assert report["rows"] == 3
+    assert report["tickets"] == 3
+    assert report["unknown_clients"] == 0
+    assert report["unknown_problems"] == 0
+    assert report["duplicate_ticket_ids_rows"] == 0
+    assert report["exact_duplicate_rows"] == 0
+
+
+def test_transform_and_quality_report_detect_unknowns_and_duplicates(
+    synthetic_etl_data,
+):
+    """Distingue les mappings inconnus, collisions d'ID et doublons exacts."""
+    tickets, clients, problems = synthetic_etl_data
+
+    unknown = make_ticket(
+        "P444444444",
+        client="CLIENT INCONNU",
+        problem="Problème inconnu",
+        priority="Priorité inconnue",
+    )
+    collision_a = make_ticket(
+        "P555555555",
+        opened="23/06/2026 à 12h00",
+        resolved="23/06/2026 à 12h05",
+        duration="5min",
+    )
+    collision_b = make_ticket(
+        "P555555555",
+        opened="23/06/2026 à 13h00",
+        resolved="23/06/2026 à 13h05",
+        duration="5min",
+    )
+    exact_duplicate = make_ticket(
+        "P666666666",
+        opened="23/06/2026 à 14h00",
+        resolved="23/06/2026 à 14h05",
+        duration="5min",
+    )
+
+    tickets = pd.DataFrame(
+        [
+            *tickets.to_dict(orient="records"),
+            unknown,
+            collision_a,
+            collision_b,
+            exact_duplicate,
+            exact_duplicate.copy(),
+        ]
+    )
+
+    transformed = transform_tickets(tickets, clients, problems)
+    report = quality_report(transformed)
+
+    assert report["rows"] == 8
+    assert report["tickets"] == 8
+    assert report["unknown_clients"] == 1
+    assert report["unknown_problems"] == 1
+    assert report["duplicate_ticket_ids_rows"] == 4
+    assert report["duplicate_ticket_ids_distinct"] == 2
+    assert report["exact_duplicate_rows"] == 2
+    assert report["exact_duplicate_distinct_records"] == 1
+
+
+def test_transform_rejects_missing_required_source_column(synthetic_etl_data):
+    """Une colonne obligatoire absente doit bloquer explicitement l'ETL."""
+    tickets, clients, problems = synthetic_etl_data
+    tickets = tickets.drop(columns=["Client"])
+
+    with pytest.raises(ValueError, match="Colonnes source manquantes"):
         transform_tickets(tickets, clients, problems)
